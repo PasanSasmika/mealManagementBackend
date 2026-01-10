@@ -1,17 +1,19 @@
 import express, { Application } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
-import authRoutes from './routes/authRoutes';
+import Authrouter from './routes/authRoutes';
+import Mealrouter from './routes/mealRoutes';
 
 const app: Application = express();
 
-// Middlewares
-app.use(helmet()); // Security headers
-app.use(cors());
-app.use(express.json()); // Body parser
 
-// Routes
-app.use('/api/auth', authRoutes);
+app.use(helmet());
+app.use(cors());
+app.use(express.json()); 
+
+
+app.use('/api/auth', Authrouter);
+app.use('/api/meals', Mealrouter);
 
 // Health Check
 app.get('/health', (req, res) => res.status(200).send('API is running'));
