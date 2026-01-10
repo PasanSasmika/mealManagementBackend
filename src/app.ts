@@ -13,7 +13,7 @@ app.use(express.json());
 
 
 app.use('/api/auth', Authrouter);
-app.use('/api/meals', Mealrouter);
+app.use('/api/meals',Mealrouter );
 
 // Health Check
 app.get('/health', (req, res) => res.status(200).send('API is running'));
