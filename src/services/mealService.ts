@@ -3,35 +3,64 @@ import { MealRequest, RequestStatus } from '../models/MealRequest';
 export class MealService {
   // Step 1: Pre-book meals for the week
   static async createBulkRequests(employeeId: string, selections: any[]) {
-    const requests = selections.flatMap(s => s.dates.map((d: string) => ({
-      employeeId, mealType: s.mealType, date: new Date(d)
-    })));
+    const requests = selections.flatMap(s => s.dates.map((d: string) => {
+      const dateObj = new Date(d);
+      dateObj.setUTCHours(0, 0, 0, 0); // Force strict UTC Midnight
+      
+      return {
+        employeeId,
+        mealType: s.mealType,
+        date: dateObj,
+        status: RequestStatus.PENDING
+      };
+    }));
     return await MealRequest.insertMany(requests);
   }
 
   // Step 2: Employee arrives and clicks "Request" (Moves PENDING -> ACTIVE)
-  static async activateTodaysMeal(employeeId: string) {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const tomorrow = new Date(today);
-    tomorrow.setDate(tomorrow.getDate() + 1);
+ static async activateTodaysMeal(employeeId: string) {
+    const startOfToday = new Date();
+    startOfToday.setUTCHours(0, 0, 0, 0);
 
-    const request = await MealRequest.findOne({
-      employeeId,
-      date: { $gte: today, $lt: tomorrow },
-      status: RequestStatus.PENDING
+    const endOfToday = new Date(startOfToday);
+    endOfToday.setUTCDate(endOfToday.getUTCDate() + 1);
+
+    // FIX: Look for both PENDING and ACTIVE status
+    const requests = await MealRequest.find({
+        employeeId,
+        date: { $gte: startOfToday, $lt: endOfToday },
+        status: { $in: [RequestStatus.PENDING, RequestStatus.ACTIVE] } 
     });
 
-    if (!request) throw new Error("No pre-booked meal found for today.");
-    request.status = RequestStatus.ACTIVE;
-    return await request.save();
-  }
+    if (requests.length === 0) throw new Error("No pre-booked meals found for today.");
 
+    // Update only the ones that are still PENDING
+    const pendingIds = requests.filter(r => r.status === RequestStatus.PENDING).map(r => r._id);
+    if (pendingIds.length > 0) {
+        await MealRequest.updateMany(
+            { _id: { $in: pendingIds } },
+            { $set: { status: RequestStatus.ACTIVE } }
+        );
+    }
+
+    // Return all today's meals (whether they were already active or just became active)
+    return await MealRequest.find({ 
+        employeeId, 
+        date: { $gte: startOfToday, $lt: endOfToday },
+        status: RequestStatus.ACTIVE 
+    });
+}
   // Step 3: Canteen views ACTIVE requests
   static async getCanteenQueue() {
-    return await MealRequest.find({ status: RequestStatus.ACTIVE })
-      .populate('employeeId', 'firstName lastName username');
-  }
+    const currentHour = new Date().getHours();
+    // Logic: If before 12 PM, only show BREAKFAST. If after, only show LUNCH.
+    const mealTypeToDisplay = currentHour < 12 ? 'BREAKFAST' : 'LUNCH';
+
+    return await MealRequest.find({ 
+        status: RequestStatus.ACTIVE,
+        mealType: mealTypeToDisplay // Filter by current time window
+    }).populate('employeeId', 'firstName lastName username');
+}
 
   // Step 4: Canteen Accept/Reject
   static async canteenResponse(requestId: string, action: 'ACCEPT' | 'REJECT') {
