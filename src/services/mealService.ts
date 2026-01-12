@@ -49,12 +49,12 @@ static async activateTodaysMeal(employeeId: string, shouldActivate: boolean) {
   // Step 3: Canteen views ACTIVE requests
   static async getCanteenQueue() {
     const currentHour = new Date().getHours();
-    // Logic: If before 12 PM, only show BREAKFAST. If after, only show LUNCH.
     const mealTypeToDisplay = currentHour < 12 ? 'BREAKFAST' : 'LUNCH';
 
     return await MealRequest.find({ 
-        status: RequestStatus.ACTIVE,
-        mealType: mealTypeToDisplay // Filter by current time window
+        // Logic: Show requests that are either ACTIVE or already OTP_VERIFIED
+        status: { $in: [RequestStatus.ACTIVE, RequestStatus.OTP_VERIFIED] },
+        mealType: mealTypeToDisplay 
     }).populate('employeeId', 'firstName lastName username');
 }
 
@@ -67,15 +67,14 @@ static async activateTodaysMeal(employeeId: string, shouldActivate: boolean) {
 
   // Step 5: OTP Verification
   static async verifyOTP(requestId: string, inputOtp: string) {
-    const request = await MealRequest.findById(requestId);
-    if (request?.otp === inputOtp) {
-      request.status = RequestStatus.OTP_VERIFIED;
-      await request.save();
-      return true;
-    }
-    return false;
+  const request = await MealRequest.findById(requestId);
+  if (request?.otp === inputOtp) {
+    // We update to a temporary status or keep as ACCEPTED
+    // Let's keep it ACCEPTED so it stays in the employee's OTP screen
+    return true;
   }
-
+  return false;
+}
 
   static async selectPayment(requestId: string, paymentType: string) {
   const validTypes = ['PAY_NOW', 'NOT_PAY_NOW', 'FREE'];
@@ -85,11 +84,13 @@ static async activateTodaysMeal(employeeId: string, shouldActivate: boolean) {
 
   return await MealRequest.findByIdAndUpdate(
     requestId,
-    { paymentType },
+    { 
+      paymentType, 
+      status: RequestStatus.OTP_VERIFIED // Move to Verified ONLY after payment is picked
+    },
     { new: true }
   );
 }
-
 /**
  * Step 6: Final Issue Decision
  * Canteen sees "OTP Verified" and "Payment Type" before clicking this
