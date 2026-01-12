@@ -8,11 +8,13 @@ export const requestMeals = async (req: any, res: Response) => {
 
 export const clickGetMeal = async (req: any, res: Response) => {
   try {
-    const result = await MealService.activateTodaysMeal(req.user.id);
-    res.json({ message: "Request sent to canteen", data: result });
+    // If it's a POST request, we treat it as an action. 
+    // If you use this for fetching too, check for a flag.
+    const { action } = req.body; 
+    const result = await MealService.activateTodaysMeal(req.user.id, action === true);
+    res.json({ data: result });
   } catch (e: any) { res.status(404).json({ message: e.message }); }
 };
-
 export const getCanteenDashboard = async (req: Request, res: Response) => {
   const queue = await MealService.getCanteenQueue();
   res.json(queue);

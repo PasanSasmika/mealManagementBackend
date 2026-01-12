@@ -18,36 +18,32 @@ export class MealService {
   }
 
   // Step 2: Employee arrives and clicks "Request" (Moves PENDING -> ACTIVE)
- static async activateTodaysMeal(employeeId: string) {
+static async activateTodaysMeal(employeeId: string, shouldActivate: boolean) {
     const startOfToday = new Date();
     startOfToday.setUTCHours(0, 0, 0, 0);
-
     const endOfToday = new Date(startOfToday);
     endOfToday.setUTCDate(endOfToday.getUTCDate() + 1);
+    
+    // 1. If shouldActivate is true, move PENDING to ACTIVE
+    if (shouldActivate) {
+      const currentHour = new Date().getHours();
+      const activeType = currentHour < 12 ? 'BREAKFAST' : 'LUNCH';
 
-    // FIX: Look for both PENDING and ACTIVE status
-    const requests = await MealRequest.find({
-        employeeId,
-        date: { $gte: startOfToday, $lt: endOfToday },
-        status: { $in: [RequestStatus.PENDING, RequestStatus.ACTIVE] } 
-    });
-
-    if (requests.length === 0) throw new Error("No pre-booked meals found for today.");
-
-    // Update only the ones that are still PENDING
-    const pendingIds = requests.filter(r => r.status === RequestStatus.PENDING).map(r => r._id);
-    if (pendingIds.length > 0) {
-        await MealRequest.updateMany(
-            { _id: { $in: pendingIds } },
-            { $set: { status: RequestStatus.ACTIVE } }
-        );
+      await MealRequest.findOneAndUpdate(
+        { 
+          employeeId, 
+          status: RequestStatus.PENDING, 
+          mealType: activeType,
+          date: { $gte: startOfToday, $lt: endOfToday } 
+        },
+        { $set: { status: RequestStatus.ACTIVE } }
+      );
     }
-
-    // Return all today's meals (whether they were already active or just became active)
-    return await MealRequest.find({ 
-        employeeId, 
-        date: { $gte: startOfToday, $lt: endOfToday },
-        status: RequestStatus.ACTIVE 
+    
+    // 2. Always return all of today's meals so the frontend knows the current state
+    return await MealRequest.find({
+      employeeId,
+      date: { $gte: startOfToday, $lt: endOfToday }
     });
 }
   // Step 3: Canteen views ACTIVE requests
