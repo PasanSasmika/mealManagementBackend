@@ -103,4 +103,69 @@ static async finalizeMeal(requestId: string, issue: boolean) {
     { new: true }
   );
 }
+
+static async cancelTomorrowMeal(employeeId: string, mealType: 'BREAKFAST' | 'LUNCH') {
+  const now = new Date();
+
+  // ✅ Rule: must be before 12:00 PM in Sri Lanka time (Asia/Colombo)
+  const colomboHour = Number(
+    new Intl.DateTimeFormat('en-US', {
+      timeZone: 'Asia/Colombo',
+      hour: '2-digit',
+      hour12: false,
+    }).format(now)
+  );
+
+  if (colomboHour >= 12) {
+    throw new Error("Cancellations must be made before 12:00 PM today.");
+  }
+
+  // ✅ Tomorrow range in strict UTC (matches your DB UTC midnight style)
+  const tomorrowStart = new Date();
+  tomorrowStart.setUTCDate(tomorrowStart.getUTCDate() + 1);
+  tomorrowStart.setUTCHours(0, 0, 0, 0);
+
+  const tomorrowEnd = new Date(tomorrowStart);
+  tomorrowEnd.setUTCDate(tomorrowEnd.getUTCDate() + 1);
+
+  // ✅ Delete using range (NOT exact date equality)
+  const result = await MealRequest.findOneAndDelete({
+    employeeId,
+    mealType,
+    status: RequestStatus.PENDING,
+    date: { $gte: tomorrowStart, $lt: tomorrowEnd },
+  });
+
+  if (!result) {
+    const exists = await MealRequest.findOne({
+      employeeId,
+      mealType,
+      date: { $gte: tomorrowStart, $lt: tomorrowEnd },
+    });
+
+    if (!exists) throw new Error("No booking found for tomorrow.");
+    if (exists.status !== RequestStatus.PENDING)
+      throw new Error("Meal is already being processed and cannot be cancelled.");
+
+    throw new Error("Could not cancel booking.");
+  }
+
+  return result;
+}
+
+
+// NEW: Get all my meals (today + next N days)
+static async getMyMeals(employeeId: string, days: number = 10) {
+  const start = new Date();
+  start.setUTCHours(0, 0, 0, 0);
+
+  const end = new Date(start);
+  end.setUTCDate(end.getUTCDate() + days);
+
+  return await MealRequest.find({
+    employeeId,
+    date: { $gte: start, $lt: end }
+  }).sort({ date: 1, mealType: 1 });
+}
+
 }

@@ -55,3 +55,28 @@ export const finalize = async (req: Request, res: Response) => {
     res.status(400).json({ message: error.message });
   }
 };
+
+
+export const cancelBooking = async (req: any, res: Response) => {
+  try {
+    const { mealType } = req.body; // e.g., { "mealType": "LUNCH" }
+    const result = await MealService.cancelTomorrowMeal(req.user.id, mealType);
+    
+    res.json({ 
+      message: "Booking cancelled successfully", 
+      cancelledMeal: result 
+    });
+  } catch (error: any) {
+    res.status(400).json({ message: error.message });
+  }
+};
+
+export const getMyMeals = async (req: any, res: Response) => {
+  try {
+    const days = Number(req.query.days || 10);
+    const result = await MealService.getMyMeals(req.user.id, days);
+    res.json({ data: result });
+  } catch (e: any) {
+    res.status(400).json({ message: e.message });
+  }
+};
