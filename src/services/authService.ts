@@ -21,20 +21,52 @@ export class AuthService {
   }
 
   // Excel Bulk Registration
-  static async registerFromExcel(buffer: Buffer) {
-    const workbook = XLSX.read(buffer, { type: 'buffer' });
-    const sheetName = workbook.SheetNames[0];
-    const data: any[] = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName]);
+ static async registerFromExcel(buffer: Buffer) {
+  const workbook = XLSX.read(buffer, { type: 'buffer' });
+  const sheetName = workbook.SheetNames[0];
+  const data: any[] = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName]);
 
-    const usersToCreate = data.map(row => ({
+  // Define allowed roles based on your Model
+  const allowedRoles = ['EMPLOYEE', 'CANTEEN', 'MANAGER', 'SADMIN'];
+
+  const usersToCreate = data.map(row => {
+    // Clean and Uppercase the role from Excel
+    let excelRole = row.role ? String(row.role).trim().toUpperCase() : 'EMPLOYEE';
+
+    // VALIDATION: If the role from Excel is not allowed (like "aaa"), force it to "EMPLOYEE"
+    if (!allowedRoles.includes(excelRole)) {
+      excelRole = 'EMPLOYEE';
+    }
+
+    return {
       firstName: row.firstName,
       lastName: row.lastName,
-      mobileNumber: row.mobileNumber?.toString(),
-      username: row.username,
-      role: row.role || 'EMPLOYEE'
-    }));
+      mobileNumber: row.mobileNumber?.toString().trim(),
+      username: row.username?.toString().trim(),
+      role: excelRole 
+    };
+  });
 
-    // Use insertMany with ordered: false to skip duplicates without failing the whole batch
-    return await User.insertMany(usersToCreate, { ordered: false });
+  // Now, all roles are guaranteed to be valid strings like "EMPLOYEE"
+  return await User.insertMany(usersToCreate, { ordered: false });
+}
+
+  static async getAllUsers() {
+    return await User.find().sort({ createdAt: -1 });
+  }
+
+  // Update a user by ID
+  static async updateUser(id: string, updateData: any) {
+    // { new: true } returns the document after update
+    const updatedUser = await User.findByIdAndUpdate(id, updateData, { new: true });
+    if (!updatedUser) throw new Error('User not found');
+    return updatedUser;
+  }
+
+  // Delete a user by ID
+  static async deleteUser(id: string) {
+    const deletedUser = await User.findByIdAndDelete(id);
+    if (!deletedUser) throw new Error('User not found');
+    return deletedUser;
   }
 }

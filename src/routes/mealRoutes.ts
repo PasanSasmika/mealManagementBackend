@@ -17,5 +17,4 @@ Mealrouter.patch('/finalize', authenticate, mealCtrl.finalize);
 Mealrouter.get('/my-meals', authenticate, mealCtrl.getMyMeals);
 
 Mealrouter.delete('/cancel-tomorrow', authenticate, mealCtrl.cancelBooking);
-
 export default Mealrouter;
